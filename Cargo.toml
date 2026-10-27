@@ -1,0 +1,27 @@
+[package]
+name = "agenticon"
+version = "0.1.0"
+edition = "2024"
+authors = ["CryptoPatrick <cryptopatrick@gmail.com>"]
+
+###############################################################################
+description = "agenticon is a library built around custom generation of identicon images for AI agents."
+documentation = "https://docs.rs/agenticon"
+homepage = "https://github.com/cryptopatrick/agenticon"
+repository = "https://github.com/cryptopatrick/agenticon"
+readme = "README.md"
+keywords = ["<KEYWORD1>", "<KEYWORD2>" ]
+license = "AGPL-3.0-only"
+autotests = false
+
+###############################################################################
+[lib]
+name = "agenticon"
+path = "src/lib.rs"
+
+[[test]]
+name = "tests"
+path = "tests/test.rs"
+
+###############################################################################
+[dependencies]
