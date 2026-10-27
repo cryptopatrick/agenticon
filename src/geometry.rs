@@ -49,8 +49,8 @@ impl Mesh {
     /// Builds the solid described by the genes, centred on the origin with
     /// its axis along +y, scaled to fit the unit sphere, and rotated by yaw.
     pub fn from_genes(g: &VisualGenes) -> Mesh {
-        let n = g.sides as usize;
-        let h = [0.45, 0.7, 0.95, 1.2][g.stretch as usize];
+        let n = usize::from(g.sides);
+        let h = [0.45, 0.7, 0.95, 1.2][usize::from(g.stretch)];
         let ring = |y: f64, r: f64, offset: f64| -> Vec<V3> {
             (0..n)
                 .map(|k| {
@@ -132,7 +132,7 @@ impl Mesh {
 
         // Yaw steps cover exactly one rotational symmetry period, so every
         // step gives a distinct orientation.
-        let yaw = 0.15 + (g.yaw as f64 / 16.0) * TAU / n as f64;
+        let yaw = 0.15 + (f64::from(g.yaw) / 16.0) * TAU / n as f64;
         let (s, c) = yaw.sin_cos();
         for v in &mut verts {
             *v = [c * v[0] + s * v[2], v[1], -s * v[0] + c * v[2]];

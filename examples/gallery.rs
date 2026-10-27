@@ -6,7 +6,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dir = std::env::args().nth(1).unwrap_or("target/gallery".into());
     let ids = [0, 1, 2, 3, 42, 1_000_000, 123_456_789_012, 999_999_999_999];
     for v in ids {
-        let icon = Agenticon::new(AgentId::new(v)?);
+        let icon = Agenticon::new(AgentId::try_new(v)?);
         icon.save_all(&dir, 256)?;
         println!("{icon}\n");
     }

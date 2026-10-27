@@ -1,4 +1,6 @@
 //! FM-synthesised identity jingles.
+//!
+//! Changing any constant here changes every published agenticon.
 
 use std::f64::consts::TAU;
 
@@ -31,6 +33,7 @@ const PATCHES: [(f64, f64, f64); 8] = [
 
 /// One note of the jingle.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Note {
     /// MIDI note number.
     pub midi: i32,
@@ -39,26 +42,28 @@ pub struct Note {
 }
 
 /// The note sequence for the given genes. The first note is always the root.
+#[must_use]
 pub fn melody(g: &SoundGenes) -> Vec<Note> {
-    let unit = UNIT_MS[g.tempo as usize] / 1000.0;
-    let rhythm = RHYTHMS[g.rhythm as usize];
+    let unit = UNIT_MS[usize::from(g.tempo)] / 1000.0;
+    let rhythm = RHYTHMS[usize::from(g.rhythm)];
     std::iter::once(0)
-        .chain(g.notes.iter().map(|&n| LADDER[n as usize]))
+        .chain(g.notes.iter().map(|&n| LADDER[usize::from(n)]))
         .zip(rhythm)
         .map(|(step, units)| Note {
-            midi: BASE_MIDI + g.root as i32 + step,
-            seconds: units as f64 * unit,
+            midi: BASE_MIDI + i32::from(g.root) + step,
+            seconds: f64::from(units) * unit,
         })
         .collect()
 }
 
-/// Synthesises the jingle as mono samples in `[-1, 1]`.
+/// Synthesises the jingle as mono samples in `[-1, 1]` at [`SAMPLE_RATE`].
+#[must_use]
 pub fn synthesize(g: &SoundGenes) -> Vec<f32> {
-    let (ratio, index, decay) = PATCHES[g.timbre as usize];
-    let sr = SAMPLE_RATE as f64;
+    let (ratio, index, decay) = PATCHES[usize::from(g.timbre)];
+    let sr = f64::from(SAMPLE_RATE);
     let mut out = Vec::new();
     for note in melody(g) {
-        let f = 440.0 * 2f64.powf((note.midi - 69) as f64 / 12.0);
+        let f = 440.0 * 2f64.powf(f64::from(note.midi - 69) / 12.0);
         let n = (note.seconds * sr) as usize;
         let release = (0.015 * sr) as usize;
         for i in 0..n {
@@ -74,9 +79,15 @@ pub fn synthesize(g: &SoundGenes) -> Vec<f32> {
     out
 }
 
-/// Encodes mono samples as a 16-bit PCM WAV file.
+/// Encodes mono samples at [`SAMPLE_RATE`] as a 16-bit PCM WAV file.
+///
+/// # Panics
+///
+/// Panics if the WAV data would exceed 4 GiB (over 2^31 samples).
+#[must_use]
 pub fn to_wav(samples: &[f32]) -> Vec<u8> {
-    let data_len = (samples.len() * 2) as u32;
+    let data_len =
+        u32::try_from(samples.len() * 2).expect("wav data exceeds 4 GiB");
     let mut w = Vec::with_capacity(44 + data_len as usize);
     w.extend_from_slice(b"RIFF");
     w.extend_from_slice(&(36 + data_len).to_le_bytes());
@@ -91,7 +102,7 @@ pub fn to_wav(samples: &[f32]) -> Vec<u8> {
     w.extend_from_slice(b"data");
     w.extend_from_slice(&data_len.to_le_bytes());
     for s in samples {
-        let v = (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+        let v = (s.clamp(-1.0, 1.0) * f32::from(i16::MAX)) as i16;
         w.extend_from_slice(&v.to_le_bytes());
     }
     w

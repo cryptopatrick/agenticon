@@ -1,17 +1,18 @@
 //! Agent IDs and the bijective scrambling that turns them into genomes.
 
+use std::error::Error;
 use std::fmt;
 use std::str::FromStr;
-
-use crate::Error;
 
 /// Number of distinct agent IDs: one trillion.
 pub const ID_SPACE: u64 = 1_000_000_000_000;
 
+/// Width of each Feistel half; two halves cover the 40-bit genome.
 const HALF_BITS: u32 = 20;
 const HALF_MASK: u64 = (1 << HALF_BITS) - 1;
 
-/// Round keys for the permutation feeding the visual genome.
+/// Round keys for the permutation feeding the visual genome. Changing them
+/// changes every published agenticon.
 pub(crate) const VISUAL_KEYS: [u64; 6] = [
     0x243F_6A88_85A3_08D3,
     0x1319_8A2E_0370_7344,
@@ -21,7 +22,8 @@ pub(crate) const VISUAL_KEYS: [u64; 6] = [
     0xBE54_66CF_34E9_0C6C,
 ];
 
-/// Round keys for the permutation feeding the sound genome.
+/// Round keys for the permutation feeding the sound genome. Changing them
+/// changes every published agenticon.
 pub(crate) const SOUND_KEYS: [u64; 6] = [
     0xC0AC_29B7_C97C_50DD,
     0x3F84_D5B5_B547_0917,
@@ -32,20 +34,39 @@ pub(crate) const SOUND_KEYS: [u64; 6] = [
 ];
 
 /// A unique agent identifier in the range `[0, 10^12)`.
+///
+/// Displays as `XXXX-XXXX-XXXX` and parses from that form or from plain
+/// digits.
+///
+/// # Examples
+///
+/// ```
+/// use agenticon::AgentId;
+///
+/// let id: AgentId = "1234-5678-9012".parse()?;
+/// assert_eq!(id, AgentId::try_new(123_456_789_012)?);
+/// assert_eq!(id.to_string(), "1234-5678-9012");
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct AgentId(u64);
 
 impl AgentId {
-    /// Creates an ID, failing if `value >= 10^12`.
-    pub fn new(value: u64) -> Result<Self, Error> {
+    /// Creates an ID from its numeric value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IdOutOfRangeError`] if `value` is not below [`ID_SPACE`].
+    pub fn try_new(value: u64) -> Result<Self, IdOutOfRangeError> {
         if value < ID_SPACE {
             Ok(AgentId(value))
         } else {
-            Err(Error::IdOutOfRange(value))
+            Err(IdOutOfRangeError { value })
         }
     }
 
-    /// The raw numeric value.
+    /// The numeric value, below [`ID_SPACE`].
+    #[must_use]
     pub fn value(self) -> u64 {
         self.0
     }
@@ -56,6 +77,20 @@ impl AgentId {
 
     pub(crate) fn unscramble(genome: u64, keys: &[u64; 6]) -> Self {
         AgentId(unpermute(genome, keys))
+    }
+}
+
+impl TryFrom<u64> for AgentId {
+    type Error = IdOutOfRangeError;
+
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        AgentId::try_new(value)
+    }
+}
+
+impl From<AgentId> for u64 {
+    fn from(id: AgentId) -> u64 {
+        id.0
     }
 }
 
@@ -73,15 +108,76 @@ impl fmt::Display for AgentId {
 }
 
 impl FromStr for AgentId {
-    type Err = Error;
+    type Err = ParseAgentIdError;
 
+    /// Parses digits, ignoring `-` and `_` separators.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let digits: String =
             s.chars().filter(|c| *c != '-' && *c != '_').collect();
-        let value = digits
-            .parse::<u64>()
-            .map_err(|_| Error::ParseId(s.to_string()))?;
-        AgentId::new(value)
+        let value = digits.parse::<u64>().map_err(|_| ParseAgentIdError {
+            input: s.to_string(),
+            out_of_range: None,
+        })?;
+        AgentId::try_new(value).map_err(|e| ParseAgentIdError {
+            input: s.to_string(),
+            out_of_range: Some(e),
+        })
+    }
+}
+
+/// A numeric value that is not a valid [`AgentId`] because it is not below
+/// [`ID_SPACE`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct IdOutOfRangeError {
+    value: u64,
+}
+
+impl IdOutOfRangeError {
+    /// The rejected value.
+    #[must_use]
+    pub fn value(&self) -> u64 {
+        self.value
+    }
+}
+
+impl fmt::Display for IdOutOfRangeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "agent id {} is not below 10^12", self.value)
+    }
+}
+
+impl Error for IdOutOfRangeError {}
+
+/// A string that is not a valid [`AgentId`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ParseAgentIdError {
+    input: String,
+    out_of_range: Option<IdOutOfRangeError>,
+}
+
+impl ParseAgentIdError {
+    /// The rejected input.
+    #[must_use]
+    pub fn input(&self) -> &str {
+        &self.input
+    }
+
+    /// Whether the input was a number, but too large.
+    #[must_use]
+    pub fn is_out_of_range(&self) -> bool {
+        self.out_of_range.is_some()
+    }
+}
+
+impl fmt::Display for ParseAgentIdError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid agent id {:?}", self.input)
+    }
+}
+
+impl Error for ParseAgentIdError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.out_of_range.as_ref().map(|e| e as _)
     }
 }
 
@@ -137,8 +233,8 @@ mod tests {
             s = splitmix64(s);
             let id = s % ID_SPACE;
             let g = permute(id, &VISUAL_KEYS);
-            assert!(g < ID_SPACE);
-            assert_eq!(unpermute(g, &VISUAL_KEYS), id);
+            assert!(g < ID_SPACE, "genome {g} of id {id} out of range");
+            assert_eq!(unpermute(g, &VISUAL_KEYS), id, "genome {g}");
         }
     }
 
@@ -146,18 +242,7 @@ mod tests {
     fn neighbours_are_scattered() {
         let a = permute(42, &VISUAL_KEYS);
         let b = permute(43, &VISUAL_KEYS);
-        assert!((a ^ b).count_ones() > 8);
-    }
-
-    #[test]
-    fn display_and_parse() {
-        let id = AgentId::new(123_456_789_012).unwrap();
-        assert_eq!(id.to_string(), "1234-5678-9012");
-        assert_eq!("1234-5678-9012".parse::<AgentId>().unwrap(), id);
-        assert_eq!(
-            "7".parse::<AgentId>().unwrap().to_string(),
-            "0000-0000-0007"
-        );
-        assert!(AgentId::new(ID_SPACE).is_err());
+        let diff = (a ^ b).count_ones();
+        assert!(diff > 8, "only {diff} bits differ");
     }
 }

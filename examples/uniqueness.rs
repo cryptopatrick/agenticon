@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         s = s
             .wrapping_mul(6364136223846793005)
             .wrapping_add(1442695040888963407);
-        let id = AgentId::new((s >> 16) % ID_SPACE)?;
+        let id = AgentId::try_new((s >> 16) % ID_SPACE)?;
         if !ids.insert(id) {
             continue;
         }

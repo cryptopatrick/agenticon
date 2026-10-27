@@ -16,10 +16,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         std::process::exit(2);
     }
-    let chain = match args[0].as_str() {
-        "ethereum" | "eth" => Chain::Ethereum,
-        _ => Chain::Bitcoin,
-    };
+    let chain: Chain = args[0].parse()?;
     let anchor = ChainAnchor::from_hex(chain, args[1].parse()?, &args[2])?;
     let mut registry = Registry::new();
     for minter in &args[3..] {

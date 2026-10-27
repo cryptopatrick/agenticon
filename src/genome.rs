@@ -29,7 +29,8 @@ impl BitWriter {
 }
 
 /// Family of convex solid.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum Family {
     /// Two n-gon caps joined by quads.
     Prism,
@@ -42,7 +43,8 @@ pub enum Family {
 }
 
 /// How the two accent colours relate to the base hue.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum Scheme {
     /// +30 / -30 degrees.
     Analogous,
@@ -56,6 +58,7 @@ pub enum Scheme {
 
 impl Scheme {
     /// Hue offsets (degrees) of the two accent colours.
+    #[must_use]
     pub fn offsets(self) -> (f64, f64) {
         match self {
             Scheme::Analogous => (30.0, -30.0),
@@ -67,7 +70,8 @@ impl Scheme {
 }
 
 /// Background treatment.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum Background {
     /// Near black.
     Dark,
@@ -80,7 +84,8 @@ pub enum Background {
 }
 
 /// Outline treatment of faces.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum EdgeStyle {
     /// No outlines.
     None,
@@ -96,34 +101,35 @@ pub enum EdgeStyle {
 pub const RING_SEGMENTS: u32 = 20;
 
 /// Visual traits decoded from the visual genome.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct VisualGenes {
     /// Solid family (2 bits).
-    pub family: Family,
+    pub(crate) family: Family,
     /// Polygon side count, 3..=10 (3 bits).
-    pub sides: u8,
+    pub(crate) sides: u8,
     /// Rotation about the solid's axis, 0..16 steps of one symmetry period
     /// (4 bits).
-    pub yaw: u8,
+    pub(crate) yaw: u8,
     /// Camera tilt for the 3D view, 0..8 (3 bits).
-    pub pitch: u8,
+    pub(crate) pitch: u8,
     /// Height of the solid, 0..4 (2 bits).
-    pub stretch: u8,
+    pub(crate) stretch: u8,
     /// Base hue, 0..32 steps of 11.25 degrees (5 bits).
-    pub hue: u8,
+    pub(crate) hue: u8,
     /// Colour scheme (2 bits).
-    pub scheme: Scheme,
+    pub(crate) scheme: Scheme,
     /// Background (2 bits).
-    pub background: Background,
+    pub(crate) background: Background,
     /// Edge style (2 bits).
-    pub edge: EdgeStyle,
+    pub(crate) edge: EdgeStyle,
     /// Free ring bits (15 bits). The ring also repeats `pitch` and `stretch`
     /// so the flat view, which cannot show them, still carries all 40 bits.
-    pub ring_bits: u16,
+    pub(crate) ring_bits: u16,
 }
 
 impl VisualGenes {
     /// Decodes 40 bits of genome.
+    #[must_use]
     pub fn decode(genome: u64) -> Self {
         let mut r = BitReader(genome);
         let family = match r.take(2) {
@@ -171,34 +177,96 @@ impl VisualGenes {
     }
 
     /// Re-encodes the traits into the genome they came from.
+    #[must_use]
     pub fn encode(&self) -> u64 {
         let mut w = BitWriter { value: 0, pos: 0 };
         w.put(self.family as u64, 2);
-        w.put(self.sides as u64 - 3, 3);
-        w.put(self.yaw as u64, 4);
-        w.put(self.pitch as u64, 3);
-        w.put(self.stretch as u64, 2);
-        w.put(self.hue as u64, 5);
+        w.put(u64::from(self.sides) - 3, 3);
+        w.put(u64::from(self.yaw), 4);
+        w.put(u64::from(self.pitch), 3);
+        w.put(u64::from(self.stretch), 2);
+        w.put(u64::from(self.hue), 5);
         w.put(self.scheme as u64, 2);
         w.put(self.background as u64, 2);
         w.put(self.edge as u64, 2);
-        w.put(self.ring_bits as u64, 15);
+        w.put(u64::from(self.ring_bits), 15);
         debug_assert_eq!(w.pos, GENOME_BITS);
         w.value
     }
 
+    /// Solid family.
+    #[must_use]
+    pub fn family(&self) -> Family {
+        self.family
+    }
+
+    /// Polygon side count, 3..=10.
+    #[must_use]
+    pub fn sides(&self) -> u8 {
+        self.sides
+    }
+
+    /// Rotation step about the solid's axis, 0..16.
+    #[must_use]
+    pub fn yaw(&self) -> u8 {
+        self.yaw
+    }
+
+    /// Camera tilt step for the 3D view, 0..8.
+    #[must_use]
+    pub fn pitch(&self) -> u8 {
+        self.pitch
+    }
+
+    /// Height step of the solid, 0..4.
+    #[must_use]
+    pub fn stretch(&self) -> u8 {
+        self.stretch
+    }
+
+    /// Base hue step, 0..32 (11.25 degrees each).
+    #[must_use]
+    pub fn hue(&self) -> u8 {
+        self.hue
+    }
+
+    /// Colour scheme.
+    #[must_use]
+    pub fn scheme(&self) -> Scheme {
+        self.scheme
+    }
+
+    /// Background treatment.
+    #[must_use]
+    pub fn background(&self) -> Background {
+        self.background
+    }
+
+    /// Outline treatment.
+    #[must_use]
+    pub fn edge(&self) -> EdgeStyle {
+        self.edge
+    }
+
+    /// The 15 free ring bits.
+    #[must_use]
+    pub fn ring_bits(&self) -> u16 {
+        self.ring_bits
+    }
+
     /// The full 20-segment ring pattern: 15 free bits, then pitch, then
     /// stretch.
+    #[must_use]
     pub fn ring_pattern(&self) -> u32 {
-        self.ring_bits as u32
-            | (self.pitch as u32) << 15
-            | (self.stretch as u32) << 18
+        u32::from(self.ring_bits)
+            | u32::from(self.pitch) << 15
+            | u32::from(self.stretch) << 18
     }
 }
 
 /// Note-duration patterns in 1/16ths of a phrase. All sum to 16, so no
 /// pattern is a tempo-scaled copy of another.
-pub const RHYTHMS: [[u8; 8]; 8] = [
+pub(crate) const RHYTHMS: [[u8; 8]; 8] = [
     [2, 2, 2, 2, 2, 2, 2, 2],
     [3, 1, 3, 1, 3, 1, 2, 2],
     [1, 1, 2, 1, 1, 2, 4, 4],
@@ -210,24 +278,25 @@ pub const RHYTHMS: [[u8; 8]; 8] = [
 ];
 
 /// Sound traits decoded from the sound genome.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct SoundGenes {
     /// Root note in semitones above the base pitch, 0..16 (4 bits). The first
     /// note always plays the root, so the root is audible.
-    pub root: u8,
+    pub(crate) root: u8,
     /// Tempo index, 0..4 (2 bits).
-    pub tempo: u8,
+    pub(crate) tempo: u8,
     /// Instrument (FM patch) index, 0..8 (3 bits).
-    pub timbre: u8,
+    pub(crate) timbre: u8,
     /// Index into [`RHYTHMS`] (3 bits).
-    pub rhythm: u8,
+    pub(crate) rhythm: u8,
     /// Seven melody notes after the root, each a step 0..16 on a
     /// three-octave pentatonic ladder (7 x 4 bits).
-    pub notes: [u8; 7],
+    pub(crate) notes: [u8; 7],
 }
 
 impl SoundGenes {
     /// Decodes 40 bits of genome.
+    #[must_use]
     pub fn decode(genome: u64) -> Self {
         let mut r = BitReader(genome);
         let root = r.take(4) as u8;
@@ -242,24 +311,55 @@ impl SoundGenes {
     }
 
     /// Re-encodes the traits into the genome they came from.
+    #[must_use]
     pub fn encode(&self) -> u64 {
         let mut w = BitWriter { value: 0, pos: 0 };
-        w.put(self.root as u64, 4);
-        w.put(self.tempo as u64, 2);
-        w.put(self.timbre as u64, 3);
-        w.put(self.rhythm as u64, 3);
+        w.put(u64::from(self.root), 4);
+        w.put(u64::from(self.tempo), 2);
+        w.put(u64::from(self.timbre), 3);
+        w.put(u64::from(self.rhythm), 3);
         for n in self.notes {
-            w.put(n as u64, 4);
+            w.put(u64::from(n), 4);
         }
         debug_assert_eq!(w.pos, GENOME_BITS);
         w.value
+    }
+
+    /// Root note in semitones above D3, 0..16.
+    #[must_use]
+    pub fn root(&self) -> u8 {
+        self.root
+    }
+
+    /// Tempo step, 0..4.
+    #[must_use]
+    pub fn tempo(&self) -> u8 {
+        self.tempo
+    }
+
+    /// Instrument (FM patch) index, 0..8.
+    #[must_use]
+    pub fn timbre(&self) -> u8 {
+        self.timbre
+    }
+
+    /// Rhythm pattern index, 0..8.
+    #[must_use]
+    pub fn rhythm(&self) -> u8 {
+        self.rhythm
+    }
+
+    /// Melody steps after the root, each 0..16 on a pentatonic ladder.
+    #[must_use]
+    pub fn notes(&self) -> [u8; 7] {
+        self.notes
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::id::splitmix64;
+    use crate::agent_id::splitmix64;
 
     #[test]
     fn decoding_is_lossless() {
@@ -275,7 +375,7 @@ mod tests {
     #[test]
     fn rhythms_are_distinct_and_balanced() {
         for (i, a) in RHYTHMS.iter().enumerate() {
-            assert_eq!(a.iter().map(|&x| x as u32).sum::<u32>(), 16);
+            assert_eq!(a.iter().map(|&x| u32::from(x)).sum::<u32>(), 16);
             for b in &RHYTHMS[i + 1..] {
                 assert_ne!(a, b);
             }
