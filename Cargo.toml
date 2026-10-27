@@ -10,7 +10,7 @@ documentation = "https://docs.rs/agenticon"
 homepage = "https://github.com/cryptopatrick/agenticon"
 repository = "https://github.com/cryptopatrick/agenticon"
 readme = "README.md"
-keywords = ["<KEYWORD1>", "<KEYWORD2>" ]
+keywords = ["identicon", "avatar", "agent", "generative", "sound"]
 license = "AGPL-3.0-only"
 autotests = false
 
@@ -25,3 +25,5 @@ path = "tests/test.rs"
 
 ###############################################################################
 [dependencies]
+sha2 = "0.10"
+tiny-skia = "0.11"
